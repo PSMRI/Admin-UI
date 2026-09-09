@@ -21,8 +21,17 @@
  */
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
+import { forkJoin, of } from 'rxjs';
+import { map } from 'rxjs/operators';
 import { ConfigService } from 'src/app/core/services/config/config.service';
 import { environment } from 'src/environments/environment';
+
+// A "select all" facility pick (e.g. every facility under several Nikshay
+// TUs) can put 1000+ IDs on this GET's query string, which blows past the
+// server/proxy request-line limit (~8KB) and comes back as a 400. The
+// backend only exposes a comma-separated-param GET (no POST/body variant),
+// so batch client-side instead of widening a single request.
+const NIKSHAY_VILLAGES_BATCH_SIZE = 200;
 
 /**
  * Author: krishna Gunti ( 378952 )
@@ -152,8 +161,29 @@ export class WorkLocationMapping {
   }
 
   getNikshayVillages(facilityIDs: any[]) {
-    return this.http.get(
-      `${environment.nikshayVillages_url}?facilityIDs=${facilityIDs.join(',')}`,
+    const ids = (facilityIDs || []).filter(
+      (id) => id !== null && id !== undefined,
+    );
+    if (!ids.length) {
+      return of({ data: [] });
+    }
+    const chunks: any[][] = [];
+    for (let i = 0; i < ids.length; i += NIKSHAY_VILLAGES_BATCH_SIZE) {
+      chunks.push(ids.slice(i, i + NIKSHAY_VILLAGES_BATCH_SIZE));
+    }
+    return forkJoin(
+      chunks.map((chunk) =>
+        this.http.get(
+          `${environment.nikshayVillages_url}?facilityIDs=${chunk.join(',')}`,
+        ),
+      ),
+    ).pipe(
+      map((responses: any[]) => ({
+        data: responses.reduce(
+          (acc: any[], r: any) => acc.concat(r?.data || []),
+          [],
+        ),
+      })),
     );
   }
 
