@@ -1616,8 +1616,17 @@ export class EmployeeMasterNewComponent implements OnInit {
             this.employeeMasterNewService
               .userActivationDeactivation(obj)
               .subscribe(
-                (res) => {
-                  console.log('Activation or deactivation response', res.data);
+                (res: any) => {
+                  if (res?.statusCode !== 200) {
+                    this.dialogService.alert(
+                      res?.errorMessage ||
+                        'Failed to ' +
+                          this.confirmMessage.toLowerCase() +
+                          ' the user',
+                      'error',
+                    );
+                    return;
+                  }
                   this.dialogService.alert(
                     this.confirmMessage + 'd successfully',
                     'success',
@@ -1625,7 +1634,16 @@ export class EmployeeMasterNewComponent implements OnInit {
                   this.getAllUserDetails();
                   this.searchTerm = null;
                 },
-                (err) => console.log('error', err),
+                (err: any) => {
+                  console.log('error', err);
+                  this.dialogService.alert(
+                    err?.errorMessage ||
+                      'Failed to ' +
+                        this.confirmMessage.toLowerCase() +
+                        ' the user',
+                    'error',
+                  );
+                },
               );
           }
         },
