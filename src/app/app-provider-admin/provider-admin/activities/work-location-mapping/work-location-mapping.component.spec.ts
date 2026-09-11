@@ -41,6 +41,10 @@ const FakeWorkLocationMapping = {
   getServices: (_userID: any) => of({ data: [] }),
   getMappedWorkLocationList: (_serviceProviderID: any) => of({ data: [] }),
   getUserName: (_serviceProviderID: any) => of({ data: [] }),
+  SaveWorkLocationMapping: (_data: any) => of({}),
+  UpdateWorkLocationMapping: (_data: any) => of({}),
+  DeleteWorkLocationMapping: (_data: any) => of({}),
+  DeleteWorkLocationMappingForTM: (_data: any) => of({}),
 };
 
 const FakeVillageMasterService = {};
@@ -190,6 +194,93 @@ describe('WorkLocationMappingComponent', () => {
       // Village selection is now saved on Create too, same as Edit.
       expect(saved.villageID).toEqual([100]);
       expect(saved.villageName).toEqual(['Alamkeri']);
+    });
+  });
+
+  // Regression coverage for the StopTB "Counsellor/Nurse silently
+  // dropped on Update" bug: (1) existingRoleIDs/newRoleIDs must compare
+  // equal regardless of which side is a numeric string, and (2) every
+  // newly-added role must go out in one SaveWorkLocationMapping call,
+  // not one racing call per role.
+  describe('updateGroupedWorkLocation — role add/keep/remove diffing', () => {
+    initTestBed();
+
+    const baseGroup = (roles: any[]): any => ({
+      userID: 4426,
+      serviceID: 11,
+      serviceName: 'Stop TB',
+      roles,
+    });
+
+    beforeEach(() => {
+      component.RolesList = [
+        { roleID: 168, roleName: 'Registration Officer' },
+        { roleID: 169, roleName: 'Nurse' },
+        { roleID: 170, roleName: 'Counsellor' },
+      ];
+      component.userID_duringEdit = 4426;
+      component.providerServiceMapID_duringEdit = 1734;
+      component.stateID_duringEdit = 2;
+      component.district_duringEdit = 1;
+      component.workLocationID_duringEdit = null;
+      component.isFacilityServicelineEdit = false;
+      component.isStopTBServicelineEdit = false;
+      component.editIsAshaSupervisor = false;
+      component.selectedNikshayTUs = [];
+      component.selectedNikshayFacilities = [];
+      component.selectedNikshayVillages = [];
+      component.selectedNikshayBlock = null;
+      component.serviceEditvillage = [];
+      component.editVillageArr = [];
+    });
+
+    it('batches two newly-added roles (Nurse + Counsellor) into a single SaveWorkLocationMapping call', () => {
+      const service = TestBed.inject(WorkLocationMapping);
+      const saveSpy = spyOn(service, 'SaveWorkLocationMapping').and.returnValue(
+        of({}),
+      );
+
+      component.editGroupedElement = baseGroup([]);
+      component.roleIDs_duringEdit = [169, 170];
+
+      component.updateGroupedWorkLocation({});
+
+      expect(saveSpy).toHaveBeenCalledTimes(1);
+      const [payload] = saveSpy.calls.mostRecent().args;
+      const sentRoleIDs = payload[0].previleges[0].ID.map((r: any) => r.roleID);
+      expect(sentRoleIDs).toEqual([169, 170]);
+    });
+
+    it('treats a numeric-string existing roleID as equal to a numeric selected roleID (no spurious add+remove)', () => {
+      const service = TestBed.inject(WorkLocationMapping);
+      const saveSpy = spyOn(service, 'SaveWorkLocationMapping').and.returnValue(
+        of({}),
+      );
+      const updateSpy = spyOn(
+        service,
+        'UpdateWorkLocationMapping',
+      ).and.returnValue(of({}));
+      const deleteSpy = spyOn(
+        service,
+        'DeleteWorkLocationMapping',
+      ).and.returnValue(of({}));
+
+      // Registration Officer's roleID arrives as a string from the
+      // work-location list endpoint; the checkbox sends it back as a number.
+      component.editGroupedElement = baseGroup([
+        {
+          roleID: '168' as any,
+          uSRMappingID: 5907,
+          userServciceRoleDeleted: false,
+        },
+      ]);
+      component.roleIDs_duringEdit = [168];
+
+      component.updateGroupedWorkLocation({});
+
+      expect(updateSpy).toHaveBeenCalledTimes(1);
+      expect(saveSpy).not.toHaveBeenCalled();
+      expect(deleteSpy).not.toHaveBeenCalled();
     });
   });
 });

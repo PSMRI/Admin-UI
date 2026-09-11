@@ -5,7 +5,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>com.iemr.admin-ui</groupId>
   <artifactId>admin-ui</artifactId>
-  <version>3.8.2</version>
+  <version>3.8.4</version>
   <name>Admin-UI</name>
   <description>Piramal - admin: Module ui</description>
 
